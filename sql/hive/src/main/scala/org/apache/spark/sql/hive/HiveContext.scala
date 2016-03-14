@@ -19,6 +19,7 @@ package org.apache.spark.sql.hive
 
 import java.io.File
 import java.net.{URL, URLClassLoader}
+import java.nio.charset.StandardCharsets
 import java.sql.Timestamp
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
@@ -46,6 +47,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, LeafExpression}
 import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution._
+import org.apache.spark.sql.execution.command.{ExecutedCommand, SetCommand}
 import org.apache.spark.sql.execution.ui.SQLListener
 import org.apache.spark.sql.hive.client._
 import org.apache.spark.sql.hive.execution.{DescribeHiveTableCommand, HiveNativeCommand}
@@ -534,6 +536,15 @@ class HiveContext private[hive](
     }
   }
 
+  /**
+   * Executes a SQL query without parsing it, but instead passing it directly to Hive.
+   * This is currently only used for DDLs and will be removed as soon as Spark can parse
+   * all supported Hive DDLs itself.
+   */
+  protected[sql] override def runNativeSql(sqlText: String): Seq[Row] = {
+    runSqlHive(sqlText).map { s => Row(s) }
+  }
+
   /** Extends QueryExecution with hive specific features. */
   protected[sql] class QueryExecution(logicalPlan: LogicalPlan)
     extends org.apache.spark.sql.execution.QueryExecution(this, logicalPlan) {
@@ -705,7 +716,7 @@ private[hive] object HiveContext {
     case (null, _) => "NULL"
     case (d: Int, DateType) => new DateWritable(d).toString
     case (t: Timestamp, TimestampType) => new TimestampWritable(t).toString
-    case (bin: Array[Byte], BinaryType) => new String(bin, "UTF-8")
+    case (bin: Array[Byte], BinaryType) => new String(bin, StandardCharsets.UTF_8)
     case (decimal: java.math.BigDecimal, DecimalType()) =>
       // Hive strips trailing zeros so use its toString
       HiveDecimal.create(decimal).toString

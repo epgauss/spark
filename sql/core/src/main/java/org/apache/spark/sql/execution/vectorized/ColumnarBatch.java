@@ -18,6 +18,7 @@ package org.apache.spark.sql.execution.vectorized;
 
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
 
 import org.apache.commons.lang.NotImplementedException;
 
@@ -251,9 +252,11 @@ public final class ColumnarBatch {
 
       @Override
       public Row next() {
-        assert(hasNext());
         while (rowId < maxRows && ColumnarBatch.this.filteredRows[rowId]) {
           ++rowId;
+        }
+        if (rowId >= maxRows) {
+          throw new NoSuchElementException();
         }
         row.rowId = rowId++;
         return row;
@@ -315,6 +318,17 @@ public final class ColumnarBatch {
    * Returns the column at `ordinal`.
    */
   public ColumnVector column(int ordinal) { return columns[ordinal]; }
+
+  /**
+   * Sets (replaces) the column at `ordinal` with column. This can be used to do very efficient
+   * projections.
+   */
+  public void setColumn(int ordinal, ColumnVector column) {
+    if (column instanceof OffHeapColumnVector) {
+      throw new NotImplementedException("Need to ref count columns.");
+    }
+    columns[ordinal] = column;
+  }
 
   /**
    * Returns the row in this batch at `rowId`. Returned row is reused across calls.
